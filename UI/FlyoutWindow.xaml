@@ -1,0 +1,53 @@
+<Window
+    x:Class="BrightnessTray.UI.FlyoutWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <Grid
+        x:Name="Root"
+        Background="Transparent"
+        Padding="16,14"
+        RowSpacing="10"
+        KeyDown="OnRootKeyDown">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <Grid Grid.Row="0" ColumnSpacing="14">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <FontIcon
+            Grid.Column="0"
+            FontSize="16"
+            VerticalAlignment="Center"
+            Foreground="{ThemeResource TextFillColorPrimaryBrush}"
+            Glyph="&#xE706;" />
+
+            <Slider
+            x:Name="BrightnessSlider"
+            Grid.Column="1"
+            Minimum="0"
+            Maximum="100"
+            SmallChange="1"
+            LargeChange="5"
+            VerticalAlignment="Center"
+            ValueChanged="OnSliderValueChanged" />
+
+            <TextBlock
+            x:Name="PercentText"
+            Grid.Column="2"
+            MinWidth="42"
+            Text="—"
+            TextAlignment="Right"
+            VerticalAlignment="Center"
+            Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
+        </Grid>
+
+        <StackPanel x:Name="InfoRows" Grid.Row="1" Spacing="4" />
+    </Grid>
+</Window>
