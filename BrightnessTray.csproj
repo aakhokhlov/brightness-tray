@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
@@ -11,11 +11,14 @@
     <ApplicationIcon>Assets\Icon.ico</ApplicationIcon>
     <UseWinUI>true</UseWinUI>
     <EnableMsixTooling>true</EnableMsixTooling>
-    <!-- Unpackaged, fully self-contained: no runtime prerequisites. -->
     <WindowsPackageType>None</WindowsPackageType>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <SelfContained>true</SelfContained>
     <WindowsAppSdkSelfContained>true</WindowsAppSdkSelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <DebugType>none</DebugType>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
@@ -24,10 +27,9 @@
     <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.5.1" />
     <PackageReference Include="System.Management" Version="10.0.12" />
   </ItemGroup>
-
+	
   <ItemGroup>
-    <Content Include="Assets\Icon.ico" CopyToOutputDirectory="PreserveNewest" />
-    <Content Include="Assets\OldIcon.ico" CopyToOutputDirectory="Never" />
+    <EmbeddedResource Include="Assets\Icon.ico" />
   </ItemGroup>
 
   <!-- Legacy single-file implementation, kept only as a logic reference. -->

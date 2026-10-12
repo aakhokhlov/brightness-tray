@@ -60,6 +60,9 @@ internal static class NativeMethods
     internal const uint LR_LOADFROMFILE = 0x0010;
     internal const uint LR_DEFAULTSIZE = 0x0040;
 
+    internal const int SM_CXICON = 11;
+    internal const int SM_CYICON = 12;
+
     // ----- popup menu -----
     internal const uint MF_STRING = 0x0000;
     internal const uint MF_SEPARATOR = 0x0800;
@@ -208,6 +211,13 @@ internal static class NativeMethods
     [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
     internal static extern IntPtr LoadImageW(IntPtr hInstance, string name, uint type,
         int cx, int cy, uint load);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    internal static extern IntPtr CreateIconFromResourceEx(byte[] presbits, uint dwResSize,
+        bool fIcon, uint dwVer, int cxDesired, int cyDesired, uint flags);
+
+    [DllImport("user32.dll")]
+    internal static extern int GetSystemMetrics(int nIndex);
 
     [DllImport("user32.dll")]
     internal static extern bool DestroyIcon(IntPtr hIcon);

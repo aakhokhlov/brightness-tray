@@ -24,13 +24,16 @@ Requires the .NET 10 SDK.
 dotnet build -c Release
 ```
 
-## Publish (self-contained, no runtime prerequisites)
+## Publish (single self-contained exe)
 
 ```
 dotnet publish -c Release
 ```
 
-Output: `bin\Release\net10.0-windows10.0.19041.0\win-x64\publish\`
+Output: `bin\Release\net10.0-windows10.0.19041.0\win-x64\publish\BrightnessTray.exe`
+(~95 MB; .NET 10 runtime, Windows App SDK and the tray icon are embedded).
+On first launch the native libraries self-extract to `%TEMP%\.net\BrightnessTray`,
+so the exe can start slightly slower the very first time.
 
 ## Notes
 

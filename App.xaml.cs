@@ -43,7 +43,9 @@ public partial class App : Application
 
         _flyout = new FlyoutWindow(controller);
 
-        _tray = new TrayIconWindow(Path.Combine(AppContext.BaseDirectory, "Assets", "Icon.ico"));
+        using var iconStream = typeof(App).Assembly.GetManifestResourceStream("BrightnessTray.Assets.Icon.ico")
+            ?? throw new InvalidOperationException("Embedded tray icon resource 'BrightnessTray.Assets.Icon.ico' not found.");
+        _tray = new TrayIconWindow(iconStream);
         _tray.SetTooltip("Brightness");
         _tray.LeftClick += OnTrayLeftClick;
         _tray.RightClick += OnTrayRightClick;

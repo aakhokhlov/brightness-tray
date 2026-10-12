@@ -38,7 +38,7 @@ internal sealed class TrayIconWindow : IDisposable
     /// <summary>WM_DISPLAYCHANGE: display topology or resolution changed.</summary>
     public event Action? DisplaySettingsChanged;
 
-    public TrayIconWindow(string iconPath)
+    public TrayIconWindow(Stream iconStream)
     {
         _wndProc = WndProc;
 
@@ -55,11 +55,10 @@ internal sealed class TrayIconWindow : IDisposable
 
         _taskbarCreatedMessage = NativeMethods.RegisterWindowMessageW("TaskbarCreated");
 
-        _hIcon = NativeMethods.LoadImageW(IntPtr.Zero, iconPath, NativeMethods.IMAGE_ICON,
-            0, 0, NativeMethods.LR_LOADFROMFILE | NativeMethods.LR_DEFAULTSIZE);
+        _hIcon = CreateIconFromIcoStream(iconStream);
         if (_hIcon == IntPtr.Zero)
         {
-            throw new IOException($"Tray icon '{iconPath}' could not be loaded.");
+            throw new IOException("Tray icon could not be created from the embedded resource.");
         }
 
         _nid = new NativeMethods.NOTIFYICONDATAW
@@ -235,6 +234,54 @@ internal sealed class TrayIconWindow : IDisposable
 
         _ = NativeMethods.GetCursorPos(out var cursor);
         return cursor;
+    }
+
+    /// <summary>
+    /// Parses an .ico stream and creates the HICON best matching the standard
+    /// tray size. Entries may be BMP- or PNG-encoded (both are passed to
+    /// CreateIconFromResourceEx unchanged).
+    /// </summary>
+    private static IntPtr CreateIconFromIcoStream(Stream stream)
+    {
+        using var reader = new BinaryReader(stream);
+        if (reader.ReadUInt16() != 0) return IntPtr.Zero; // reserved
+        if (reader.ReadUInt16() != 1) return IntPtr.Zero; // must be an .ico
+        ushort count = reader.ReadUInt16();
+        if (count == 0) return IntPtr.Zero;
+
+        // Gather entries, preferring the one closest to the system icon size
+        // (breaking ties toward the larger image).
+        int desired = NativeMethods.GetSystemMetrics(NativeMethods.SM_CXICON);
+        uint bestOffset = 0;
+        uint bestSize = 0;
+        int bestScore = int.MaxValue;
+
+        for (int i = 0; i < count; i++)
+        {
+            byte width = reader.ReadByte();  // 0 means 256
+            byte height = reader.ReadByte(); // 0 means 256
+            _ = reader.ReadBytes(6);         // color count, reserved, planes, bit count
+            uint size = reader.ReadUInt32();
+            uint offset = reader.ReadUInt32();
+
+            int w = width == 0 ? 256 : width;
+            int score = Math.Abs(w - desired) * 2 - (w > desired ? 1 : 0);
+            if (score < bestScore || (score == bestScore && w > bestSize))
+            {
+                bestScore = score;
+                bestOffset = offset;
+                bestSize = size;
+            }
+        }
+        if (bestSize == 0) return IntPtr.Zero;
+
+        _ = stream.Seek(bestOffset, SeekOrigin.Begin);
+        byte[] data = reader.ReadBytes((int)bestSize);
+
+        // Entries may be BMP- or PNG-encoded; CreateIconFromResourceEx accepts
+        // both as-is (PNG entries must keep their 8-byte file header).
+        return NativeMethods.CreateIconFromResourceEx(data, (uint)data.Length, fIcon: true,
+            dwVer: 0x00030000, cxDesired: 0, cyDesired: 0, flags: NativeMethods.LR_DEFAULTSIZE);
     }
 
     public void Dispose()
