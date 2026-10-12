@@ -6,6 +6,7 @@
     <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
     <RootNamespace>BrightnessTray</RootNamespace>
     <AssemblyName>BrightnessTray</AssemblyName>
+    <Version>0.1.0</Version>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>Assets\Icon.ico</ApplicationIcon>
     <UseWinUI>true</UseWinUI>
@@ -26,6 +27,7 @@
 
   <ItemGroup>
     <Content Include="Assets\Icon.ico" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Assets\OldIcon.ico" CopyToOutputDirectory="Never" />
   </ItemGroup>
 
   <!-- Legacy single-file implementation, kept only as a logic reference. -->
