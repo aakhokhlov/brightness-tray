@@ -32,9 +32,4 @@
     <EmbeddedResource Include="Assets\Icon.ico" />
   </ItemGroup>
 
-  <!-- Legacy single-file implementation, kept only as a logic reference. -->
-  <ItemGroup>
-    <Compile Remove="BrightnessTray.cs" />
-  </ItemGroup>
-
 </Project>

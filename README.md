@@ -42,5 +42,3 @@ so the exe can start slightly slower the very first time.
   setting on every start (deleted value self-heals on next launch).
 - Settings live in `%APPDATA%\BrightnessTray\settings.json` and are never
   reset on launch.
-- The legacy WinForms implementation is kept in `BrightnessTray.cs` as a logic
-  reference and is excluded from the build.
