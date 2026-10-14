@@ -32,4 +32,10 @@
     <EmbeddedResource Include="Assets\Icon.ico" />
   </ItemGroup>
 
+  <PropertyGroup>
+    <!-- Default globbing would sweep the whole test project (incl. its bin/obj
+         output) into the app compile and publish; a Compile-only remove is not enough. -->
+    <DefaultItemExcludes>$(DefaultItemExcludes);BrightnessTray.Tests\**</DefaultItemExcludes>
+  </PropertyGroup>
+
 </Project>

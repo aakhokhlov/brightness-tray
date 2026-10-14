@@ -19,10 +19,12 @@ internal static class Settings
 {
     public static AppSettings Current { get; private set; } = new();
 
-    private static string DirectoryPath => Path.Combine(
+    internal static string DirectoryPath => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "BrightnessTray");
 
     private static string FilePath => Path.Combine(DirectoryPath, "settings.json");
+
+    private static readonly object SaveGate = new();
 
     private static readonly JsonSerializerOptions Options = new()
     {
@@ -53,8 +55,15 @@ internal static class Settings
     {
         try
         {
-            Directory.CreateDirectory(DirectoryPath);
-            File.WriteAllText(FilePath, JsonSerializer.Serialize(Current, Options));
+            lock (SaveGate)
+            {
+                Directory.CreateDirectory(DirectoryPath);
+                // Write-then-move so a crash mid-write (e.g. Exit during a
+                // background save) can't leave a truncated settings file.
+                string tmp = FilePath + ".tmp";
+                File.WriteAllText(tmp, JsonSerializer.Serialize(Current, Options));
+                File.Move(tmp, FilePath, overwrite: true);
+            }
         }
         catch
         {

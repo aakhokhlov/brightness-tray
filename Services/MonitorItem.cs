@@ -28,6 +28,21 @@ internal abstract class MonitorItem
     public virtual void Close() { }
 
     protected static int ClampPercent(int percent) => Math.Clamp(percent, 0, 100);
+
+    /// <summary>Maps a 0-100 percent value into the display's raw DDC range.</summary>
+    internal static int PercentToRaw(int percent, uint min, uint max)
+    {
+        int lo = (int)min, hi = (int)max;
+        int raw = (int)Math.Round(lo + (hi - lo) * ClampPercent(percent) / 100.0);
+        return Math.Clamp(raw, lo, hi);
+    }
+
+    /// <summary>Maps a raw DDC value back to 0-100 percent; null for an empty range.</summary>
+    internal static int? RawToPercent(uint cur, uint min, uint max)
+    {
+        if (max <= min) return null;
+        return ClampPercent((int)Math.Round((cur - min) * 100.0 / (max - min)));
+    }
 }
 
 /// <summary>External monitor controlled through DDC/CI (dxva2).</summary>
@@ -54,20 +69,20 @@ internal sealed class DdcMonitorItem : MonitorItem
 
         uint min = 0, cur = 0, max = 0;
         if (!NativeMethods.GetMonitorBrightness(_handle, ref min, ref cur, ref max)) return null;
-        if (max <= min) return null;
 
-        _min = min;
-        _max = max;
-        return ClampPercent((int)Math.Round((cur - min) * 100.0 / (max - min)));
+        int? percent = RawToPercent(cur, min, max);
+        if (percent is not null)
+        {
+            _min = min;
+            _max = max;
+        }
+        return percent;
     }
 
     public override bool SetPercent(int percent)
     {
         if (!SupportsBrightness || _closed || _max <= _min) return false;
-
-        int raw = (int)Math.Round(_min + (_max - _min) * ClampPercent(percent) / 100.0);
-        raw = Math.Clamp(raw, (int)_min, (int)_max);
-        return NativeMethods.SetMonitorBrightness(_handle, (uint)raw);
+        return NativeMethods.SetMonitorBrightness(_handle, (uint)PercentToRaw(percent, _min, _max));
     }
 
     public override void Close()

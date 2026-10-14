@@ -28,7 +28,6 @@ public sealed partial class FlyoutWindow : Window
     private readonly Microsoft.UI.Dispatching.DispatcherQueueTimer _applyTimer;
     private readonly IntPtr _hwnd;
     private bool _updatingFromCode;
-    private bool _applying;
     private int _infoRowCount;
     private bool _visible;
 
@@ -52,28 +51,15 @@ public sealed partial class FlyoutWindow : Window
         _controller.MonitorsChanged += OnMonitorsChanged;
 
         // Debounces slider dragging: DDC/CI writes are slow, so the value is
-        // applied a short moment after the last change.
+        // applied a short moment after the last change. The controller
+        // coalesces concurrent applies, so an in-flight chain just absorbs
+        // this value as its pending one.
         _applyTimer = DispatcherQueue.CreateTimer();
         _applyTimer.Interval = TimeSpan.FromMilliseconds(350);
         _applyTimer.Tick += async (_, _) =>
         {
             _applyTimer.Stop();
-            if (_applying)
-            {
-                // A previous apply is still in flight: wait for it to finish.
-                _applyTimer.Start();
-                return;
-            }
-
-            _applying = true;
-            try
-            {
-                await _controller.ApplyAsync((int)BrightnessSlider.Value);
-            }
-            finally
-            {
-                _applying = false;
-            }
+            await _controller.ApplyAsync((int)BrightnessSlider.Value);
         };
     }
 

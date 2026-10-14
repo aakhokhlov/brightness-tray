@@ -56,12 +56,9 @@ internal static class NativeMethods
 
     internal const uint MONITOR_DEFAULTTONEAREST = 2;
 
-    internal const uint IMAGE_ICON = 1;
-    internal const uint LR_LOADFROMFILE = 0x0010;
     internal const uint LR_DEFAULTSIZE = 0x0040;
 
     internal const int SM_CXICON = 11;
-    internal const int SM_CYICON = 12;
 
     // ----- popup menu -----
     internal const uint MF_STRING = 0x0000;
@@ -180,9 +177,6 @@ internal static class NativeMethods
     [DllImport("user32.dll", SetLastError = true)]
     internal static extern bool GetCursorPos(out POINT lpPoint);
 
-    [DllImport("user32.dll", SetLastError = true)]
-    internal static extern bool SetCursorPos(int x, int y);
-
     [DllImport("user32.dll")]
     internal static extern IntPtr MonitorFromPoint(POINT pt, uint flags);
 
@@ -204,13 +198,6 @@ internal static class NativeMethods
 
     [DllImport("dwmapi.dll")]
     internal static extern int DwmSetWindowAttribute(IntPtr hWnd, int attribute, ref int value, int size);
-
-    [DllImport("user32.dll")]
-    internal static extern IntPtr GetForegroundWindow();
-
-    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-    internal static extern IntPtr LoadImageW(IntPtr hInstance, string name, uint type,
-        int cx, int cy, uint load);
 
     [DllImport("user32.dll", SetLastError = true)]
     internal static extern IntPtr CreateIconFromResourceEx(byte[] presbits, uint dwResSize,

@@ -18,15 +18,17 @@ internal sealed class BrightnessController : IDisposable
     private readonly CancellationTokenSource _cts = new();
     private List<MonitorItem> _monitors = new();
     private int _currentPercent;
+    private bool _hasCurrent;         // false until a real value was read or applied
     private bool _hasTargets;
+    private bool _applying;           // one apply chain at a time; extras coalesce
+    private int? _pendingPercent;     // latest value requested while an apply runs
+    private bool _restoreSuppressed;  // user changed brightness; stop the startup restore
 
     /// <summary>Raised on the UI thread whenever the current brightness value changes.</summary>
     public event Action<int>? PercentChanged;
 
     /// <summary>Raised on the UI thread after the monitor list changed.</summary>
     public event Action? MonitorsChanged;
-
-    public int CurrentPercent => _currentPercent;
 
     public bool HasTargets => _hasTargets;
 
@@ -57,30 +59,32 @@ internal sealed class BrightnessController : IDisposable
     /// <summary>Re-enumerates displays and refreshes the current value.</summary>
     public async Task RefreshAsync()
     {
-        List<MonitorItem> fresh = await Task.Run(() =>
+        int? current = await Task.Run(() =>
         {
+            // Enumeration is slow (WMI + DDC); run it outside the gate so
+            // pending applies don't queue behind it. The read uses the fresh
+            // handles before they are published, so no concurrent close can
+            // reach them.
+            var list = MonitorService.Enumerate();
+            int? result = ReadCurrentPercent(list);
             lock (_gate)
             {
-                var list = MonitorService.Enumerate();
                 foreach (var old in _monitors) old.Close();
                 _monitors = list;
                 _hasTargets = list.Any(m => m.SupportsBrightness);
-                return list;
+                if (result is int value)
+                {
+                    _currentPercent = value;
+                    _hasCurrent = true;
+                }
             }
+            return result;
         }).ConfigureAwait(false);
-
-        int? current = await Task.Run(() => ReadCurrentPercent(fresh)).ConfigureAwait(false);
-        int percent = _currentPercent;
-        if (current is int value)
-        {
-            lock (_gate) _currentPercent = value;
-            percent = value;
-        }
 
         _dispatcher.TryEnqueue(() =>
         {
             MonitorsChanged?.Invoke();
-            if (current is not null)
+            if (current is int percent)
             {
                 PercentChanged?.Invoke(percent);
             }
@@ -88,61 +92,100 @@ internal sealed class BrightnessController : IDisposable
     }
 
     /// <summary>Applies a brightness value to every controllable display and persists it.</summary>
-    public Task ApplyAsync(int percent) => ApplyCoreAsync(percent, persist: true);
+    public Task ApplyAsync(int percent)
+    {
+        _restoreSuppressed = true; // user intent wins over the startup restore
+
+        lock (_gate)
+        {
+            if (_applying)
+            {
+                // An apply chain is running (slow DDC writes): keep only the
+                // latest value; it is applied when the running chain drains.
+                _pendingPercent = Math.Clamp(percent, 0, 100);
+                return Task.CompletedTask;
+            }
+            _applying = true;
+        }
+        return ApplyCoreAsync(percent);
+    }
 
     /// <summary>Wheel support: steps the current value by <paramref name="notches"/> * 5.</summary>
-    public Task StepAsync(int notches) => ApplyAsync(_currentPercent + notches * WheelStep);
-
-    private async Task ApplyCoreAsync(int percent, bool persist)
+    public Task StepAsync(int notches)
     {
-        percent = Math.Clamp(percent, 0, 100);
-
-        (bool AnyOk, bool AnyFailed) results = await Task.Run(() =>
+        lock (_gate)
         {
-            lock (_gate)
+            // Ignore wheel input until a real value was read or applied,
+            // otherwise stepping up from the 0 placeholder dims the displays.
+            if (!_hasCurrent) return Task.CompletedTask;
+            return ApplyAsync(_currentPercent + notches * WheelStep);
+        }
+    }
+
+    private async Task ApplyCoreAsync(int percent)
+    {
+        try
+        {
+            percent = Math.Clamp(percent, 0, 100);
+
+            (bool AnyOk, bool AnyFailed) results = await Task.Run(() =>
             {
-                bool anyOk = false;
-                bool anyFailed = false;
-                foreach (var target in _monitors.Where(m => m.SupportsBrightness))
+                lock (_gate)
                 {
-                    if (target.SetPercent(percent))
+                    bool anyOk = false;
+                    bool anyFailed = false;
+                    foreach (var target in _monitors.Where(m => m.SupportsBrightness))
                     {
-                        anyOk = true;
-                        if (persist)
+                        if (target.SetPercent(percent))
                         {
+                            anyOk = true;
                             Settings.Current.Brightness[target.Key] = percent;
                         }
+                        else
+                        {
+                            anyFailed = true;
+                        }
                     }
-                    else
-                    {
-                        anyFailed = true;
-                    }
+                    return (anyOk, anyFailed);
                 }
-                return (anyOk, anyFailed);
-            }
-        }).ConfigureAwait(false);
+            }).ConfigureAwait(false);
 
-        if (persist && results.AnyOk)
-        {
-            Settings.Save();
-        }
-
-        if (results.AnyOk)
-        {
-            lock (_gate) _currentPercent = percent;
-            RaisePercentChanged(percent);
-        }
-
-        if (results.AnyFailed)
-        {
-            // Something refused the value (e.g. a display was unplugged mid-drag):
-            // resync state from hardware instead of keeping a lie.
-            int? actual = await Task.Run(() => ReadCurrentPercent(Monitors)).ConfigureAwait(false);
-            if (actual is int value)
+            if (results.AnyOk)
             {
-                lock (_gate) _currentPercent = value;
-                RaisePercentChanged(value);
+                Settings.Save();
+                lock (_gate)
+                {
+                    _currentPercent = percent;
+                    _hasCurrent = true;
+                }
+                RaisePercentChanged(percent);
             }
+
+            if (results.AnyFailed)
+            {
+                // Something refused the value (e.g. a display was unplugged
+                // mid-drag): resync state from hardware instead of keeping a
+                // lie. Under the gate so a concurrent refresh cannot close
+                // the handles we are reading from.
+                int? actual;
+                lock (_gate) actual = ReadCurrentPercent(_monitors);
+                if (actual is int value)
+                {
+                    lock (_gate) _currentPercent = value;
+                    RaisePercentChanged(value);
+                }
+            }
+        }
+        finally
+        {
+            int? next;
+            lock (_gate)
+            {
+                _applying = false;
+                next = _pendingPercent;
+                _pendingPercent = null;
+            }
+            if (next is int queued) _ = ApplyAsync(queued);
         }
     }
 
@@ -156,6 +199,8 @@ internal sealed class BrightnessController : IDisposable
         {
             for (int attempt = 0; attempt < 20 && !token.IsCancellationRequested; attempt++)
             {
+                if (_restoreSuppressed) return; // the user already changed brightness
+
                 await Task.Delay(attempt == 0 ? TimeSpan.FromSeconds(5) : TimeSpan.FromSeconds(3), token)
                     .ConfigureAwait(false);
 
@@ -171,9 +216,14 @@ internal sealed class BrightnessController : IDisposable
                         }
                     }
 
+                    // Snapshot under the gate: the apply chain may be writing
+                    // the dictionary on another thread right now.
+                    var saved = new List<KeyValuePair<string, int>>();
+                    lock (_gate) saved.AddRange(Settings.Current.Brightness);
+
                     int matched = 0;
                     bool allOk = true;
-                    foreach (var (key, value) in Settings.Current.Brightness)
+                    foreach (var (key, value) in saved)
                     {
                         if (byKey.TryGetValue(key, out var monitor))
                         {
@@ -190,7 +240,11 @@ internal sealed class BrightnessController : IDisposable
                         int? current = ReadCurrentPercent(list);
                         if (current is int restored)
                         {
-                            lock (_gate) _currentPercent = restored;
+                            lock (_gate)
+                            {
+                                _currentPercent = restored;
+                                _hasCurrent = true;
+                            }
                             RaisePercentChanged(restored);
                         }
                         break;

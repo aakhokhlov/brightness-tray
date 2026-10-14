@@ -34,6 +34,22 @@ public partial class App : Application
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
+        // The app has no window and no console: without this, any crash just
+        // makes the tray icon vanish with nothing to diagnose afterwards.
+        Application.Current.UnhandledException += (_, e) =>
+        {
+            try
+            {
+                Directory.CreateDirectory(Settings.DirectoryPath);
+                File.AppendAllText(Path.Combine(Settings.DirectoryPath, "error.log"),
+                    $"{DateTime.Now:yyyy-MM-dd HH:mm:ss}  {e.Message}\n{e.Exception}\n");
+            }
+            catch
+            {
+                // Logging must never crash the app.
+            }
+        };
+
         Settings.Load();
         Autostart.Sync(Settings.Current.Autostart);
 

@@ -73,7 +73,10 @@ internal sealed class TrayIconWindow : IDisposable
             szInfo = string.Empty,
             szInfoTitle = string.Empty,
         };
-        AddIcon();
+        if (!AddIcon())
+        {
+            throw new InvalidOperationException("Shell_NotifyIcon(NIM_ADD) failed.");
+        }
     }
 
     public void SetTooltip(string text)
@@ -134,26 +137,29 @@ internal sealed class TrayIconWindow : IDisposable
         }
     }
 
-    private void AddIcon()
+    private bool AddIcon()
     {
         var nid = _nid;
         if (!NativeMethods.ShellApi.NotifyIcon(NativeMethods.NIM_ADD, ref nid))
         {
-            throw new InvalidOperationException("Shell_NotifyIcon(NIM_ADD) failed.");
+            return false;
         }
 
         var version = _nid;
         version.uFlags = 0;
         version.uVersion = NativeMethods.NOTIFYICON_VERSION_4;
         _ = NativeMethods.ShellApi.NotifyIcon(NativeMethods.NIM_SETVERSION, ref version);
+        return true;
     }
 
     private IntPtr WndProc(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam)
     {
         if (msg == _taskbarCreatedMessage)
         {
-            // Explorer restarted: re-register the icon.
-            if (!_disposed) AddIcon();
+            // Explorer restarted: re-register the icon. A transient failure
+            // here (Explorer is mid-startup itself) must not kill the app;
+            // the next TaskbarCreated gets another try.
+            if (!_disposed) _ = AddIcon();
         }
         else if (msg == NativeMethods.WM_APP_CALLBACK)
         {
